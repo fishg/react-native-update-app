@@ -84,7 +84,7 @@ class RNUpdate extends Component {
     checkUpdate(fetchRes, isManual) {
         try {
             this.fetchRes = fetchRes
-            let {version, desc} = fetchRes
+            let {version, desc, build} = fetchRes
 
             // 安装包下载目录
 
@@ -93,7 +93,7 @@ class RNUpdate extends Component {
             }
 
 
-            if (version > RNUpdateApp.appVersion) {
+            if (build > RNUpdateApp.buildVersion) {
                 try {
                     RNUpdateApp.getFileSize(this.fetchRes.url).then(async fileSize => {
                         fileSize = Number(fileSize / 1024 / 1024).toFixed(2, 10)
