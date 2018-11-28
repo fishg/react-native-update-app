@@ -40,6 +40,12 @@ class RNUpdate extends Component {
         CancelTips: "", // 用户取消升级的提示
         bannerImage: require('./theme/1/banner.png'),
         closeImage: require('./theme/1/close.png'),
+        fileSizeLabel: '文件大小：',
+        changeLogLabel: '升级说明：',
+        downloading:'下载中',
+        install:"安装",
+        alreadyLatest:'已经是最新版本',
+        installFail:'安装失败'
     }
 
     constructor(props) {
@@ -81,11 +87,13 @@ class RNUpdate extends Component {
         this.loading = false // 是否在下载中
     }
 
-    checkUpdate(fetchRes, isManual) {
+    checkUpdate = (fetchRes, isManual)=>{
         try {
+            this.md5 = fetchRes.md5
+            this.force = fetchRes.forceUpgrade
             this.fetchRes = fetchRes
             let {version, desc, build} = fetchRes
-
+            let {alreadyLatest} = this.props
             // 安装包下载目录
 
             if (!Array.isArray(desc)) {
@@ -112,19 +120,20 @@ class RNUpdate extends Component {
                 }
             } else {
                 if (isManual) {
-                    ToastAndroid.show("已经是最新版本",
+                    ToastAndroid.show(alreadyLatest,
                         ToastAndroid.SHORT,
                         ToastAndroid.BOTTOM
                     )
                 }
             }
         } catch (e) {
-            console.warn('react-native-update-app check update error', e)
+            console.warn('check update error', e)
         }
     }
 
     errorTips = () => {
-        ToastAndroid.show("安装失败",
+        let {installFail} = this.props
+        ToastAndroid.show(installFail,
             ToastAndroid.SHORT,
             ToastAndroid.BOTTOM
         )
@@ -140,8 +149,13 @@ class RNUpdate extends Component {
         // 检查包是否已经下载过，如果有，则直接安装
         let exist = await RNFS.exists(this.filePath)
         if (exist) {
-            RNUpdateApp.install(this.filePath)
-            this.hideModal()
+            let md5 = await RNFS.hash(this.filePath,'md5')
+            if(md5 === this.md5){
+                RNUpdateApp.install(this.filePath)
+            }else{
+                let ret = RNFS.unlink(this.filePath)
+            }
+            if(!this.force) this.hideModal()
             return
         }
 
@@ -163,24 +177,28 @@ class RNUpdate extends Component {
             }
         }).promise.then(response => {
             // 下载完成后
-            this.hideModal()
-            if (response.statusCode == 200) {
-                // console.log("FILES UPLOADED!") // response.statusCode, response.headers, response.body
-                RNUpdateApp.install(this.filePath)
-
-            } else {
-                // 提示安装失败，关闭升级窗口
-                this.errorTips()
-            }
-
-            this.loading = false
-        })
-            .catch(err => {
-                if (err.description == "cancegetFileSizelled") {
+            if(!this.force) this.hideModal()
+            RNFS.hash(this.filePath,'md5').then(md5=>{
+                if (response.statusCode == 200 && md5 === this.md5) {
+                    // console.log("FILES UPLOADED!") // response.statusCode, response.headers, response.body
+                    RNUpdateApp.install(this.filePath)
+                } else {
+                    // 提示安装失败，关闭升级窗口
+                    RNFS.unlink(this.filePath).then(()=>{}).catch(()=>{})
                     this.errorTips()
                 }
-                this.hideModal()
+            }).catch(e=>{
+                this.errorTips()
+            }).finally(()=>{
+                this.loading = false
             })
+        })
+        .catch(err => {
+            if (err.description == "cancegetFileSizelled") {
+                this.errorTips()
+            }
+            this.hideModal()
+        })
     }
 
 
@@ -219,7 +237,9 @@ class RNUpdate extends Component {
             progressBarColor,
             updateBtnHeight,
             updateBoxWidth,
-            updateBtnText
+            updateBtnText,
+            downloading,
+            install
         } = this.props
         if (progress > 0 && progress < 1) {
             return (
@@ -234,14 +254,14 @@ class RNUpdate extends Component {
                             width: progress * updateBoxWidth,
                         }}
                     />
-                    <Text style={styles.updateBtnText}>下载中{parseInt(progress * 100, 10)}%</Text>
+                    <Text style={styles.updateBtnText}>{downloading}{parseInt(progress * 100, 10)}%</Text>
                 </View>
             )
         }
         return (
             <TouchableOpacity onPress={this.updateApp}>
                 <View style={styles.updateBtn}>
-                    <Text style={styles.updateBtnText}>{progress == 1 ? '安装' : updateBtnText}</Text>
+                    <Text style={styles.updateBtnText}>{progress == 1 ? install : updateBtnText}</Text>
                 </View>
             </TouchableOpacity>
         )
@@ -298,14 +318,15 @@ class RNUpdate extends Component {
 
     renderFileSize = () => {
         let {fileSize} = this.state
+        let {fileSizeLabel} = this.props
         if (!isIOS) {
-            return <Text>文件大小：{fileSize}M</Text>
+            return <Text>{fileSizeLabel}{fileSize}M</Text>
         }
     }
 
     render() {
         let {modalVisible, progress, desc } = this.state
-        let {updateBoxWidth, updateBoxHeight} = this.props
+        let {updateBoxWidth, updateBoxHeight, changeLogLabel} = this.props
         return (
             <Modal
                 animationType={"fade"}
@@ -315,7 +336,7 @@ class RNUpdate extends Component {
                 }}
             >
                 <View style={styles.wrap}>
-                    {this.renderCloseBtn()}
+                    {!this.force ? this.renderCloseBtn(): null}
                     <View
                         style={[
                             styles.innerBox,
@@ -325,7 +346,7 @@ class RNUpdate extends Component {
                         <View style={{width: updateBoxWidth, height: 85}}>
                             <ScrollView style={{paddingLeft: 10, paddingRight: 10}}>
                                 {this.renderFileSize()}
-                                <Text>升级说明：</Text>
+                                <Text>{changeLogLabel}</Text>
                                 {desc &&
                                 desc.map((d, i) => {
                                     return (
