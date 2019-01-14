@@ -226,9 +226,9 @@ class RNUpdate extends Component {
       modalVisible: false
     });
 
-    if (this.props.onCancelUpdate) {
-      this.props.onCancelUpdate();
-    }
+    const { onCancelUpdate } = this.props;
+    const { build } = this.fetchRes;
+    onCancelUpdate(build);
 
     this.jobId && RNFS.stopDownload(this.jobId);
   };
