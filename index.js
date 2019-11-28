@@ -150,6 +150,9 @@ class RNUpdate extends Component {
         RNUpdateApp.install(this.filePath);
       } else {
         let ret = RNFS.unlink(this.filePath);
+        //开始重新下载
+        this.androidUpdate();
+        return;
       }
       if (!this.force) this.hideModal();
       return;
@@ -225,6 +228,13 @@ class RNUpdate extends Component {
     this.setState({
       modalVisible: false
     });
+    //检测是否在下载中关闭窗口，若是则重置进度条变量，下次打开重新下载
+    const { progress } = this.state;
+    if (progress > 0 && progress < 1) {
+      this.setState({
+        progress: 0
+      });
+    }
 
     const { onCancelUpdate } = this.props;
     const { build } = this.fetchRes;
